@@ -15,7 +15,7 @@ def main():
                     # for the given environment
     observationSpace = (250, 160, 3) #observation space for the given environment
     # Set up logging for predictions
-    tensors_to_log = {"Q-Values": 'logits'}
+    tensors_to_log = {"Q-Values": 'logits/kernel'}
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log, every_n_iter=50)
     #variables
@@ -26,7 +26,7 @@ def main():
     global net
     net = tf.estimator.Estimator(
             model_fn=Q_Net,
-            model_dir='/home/porrster/Documents/AtariAI/model_dir',
+            model_dir='/home/porrster/Documents/atari_ai/model_dir',
             params = {'actionRange':actionRange,
                 'observationSpace':observationSpace})
     env = gym.make("Centipede-v0")
@@ -55,8 +55,8 @@ def main():
                         batch_size=1,
                         shuffle = False)
                 qVals = net.predict(
-                        input_fn=input_fn,
-                        checkpoint_path='~/Douments/AtariAI/model.ckpt')
+                        input_fn=input_fn)
+                        #checkpoint_path='~/Douments/atari_ai/model_dir/model.ckpt')
                 qVals = list(qVals)[0]['Q-Values']
 
                 # Upper confidence bound adjustment of the Q-Values
@@ -104,15 +104,15 @@ def train_net(D, batchNum, logging_hook, actionRange):
         np.random.shuffle(rand)
 
     for i in rand:
-        pred_input_fn = tf.estimator.inputs.numpy_input_fn(
-                x = {'X':D[i]['preObs']},
-                batch_size = 1,
-                shuffle = False)
-        labels = net.predict(
-                input_fn = pred_input_fn,
-                checkpoint_path = '/home/porrster/Documents/AtariAI/model.ckpt')
-        labels = list(labels)[0]['Q-Values']
-        if len(D) == 1: #meaning we havent trained the net yet and there
+        if len(D) != 1:
+            pred_input_fn = tf.estimator.inputs.numpy_input_fn(
+                    x = {'X':D[i]['preObs']},
+                    batch_size = 1,
+                    shuffle = False)
+            labels = net.predict(
+                    input_fn = pred_input_fn)
+            labels = list(labels)[0]['Q-Values']
+        elif len(D) == 1: #meaning we havent trained the net yet and there
                         # are no predicted values
             labels = np.random.rand(actionRange)
         #Use predicted values to calculate loss and perform
@@ -193,6 +193,7 @@ def Q_Net(features, labels, mode, params):
             units = params['actionRange'],
             name = 'logits')
     #Store predicitons and exit if mode is predict
+    print(tf.all_variables())
     prediction = {'Q-Values':logits}
     if mode == tf.estimator.ModeKeys.PREDICT:
         return tf.estimator.EstimatorSpec(
