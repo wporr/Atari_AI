@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 
 def main():
-    sess = tf.Session()
+    sess = tf.Session() #needed to prevent core dump with GPU tensorflow, probably a bug
     sess = tf_debug.LocalCLIDebugWrapperSession(sess)
     #hyperparameters
     replayCache = 100 #number of events we will hold in memory
@@ -18,6 +18,8 @@ def main():
     tensors_to_log = {"Q-Values": 'logits/kernel'} #the /kernel part is added by api
     logging_hook = tf.train.LoggingTensorHook(
         tensors=tensors_to_log, every_n_iter=50)
+    #File to keep track of scores
+    F = open('Scores.txt', 'w')
     #variables
     D = [] # list that will hold the replay cache
     actNum = [1 for x in range(actionRange)] #list meant to hold the number of times a given action has been taken
@@ -51,6 +53,7 @@ def main():
             env.render()
             #Predict Q-Values of actions
             action = 0
+            qVals = []
             if len(D) != 0:
                 input_fn = tf.estimator.inputs.numpy_input_fn(
                         x = {'X':np.asarray([preObs])},
@@ -65,7 +68,9 @@ def main():
                 for a in range(actionRange):
                     qVals[a] = qVals[a] + ((2 * math.log(t,10)) / actNum[a])**.5
                 #Select action based on highest adjusted Q-Value
-                action = np.argmax(qVals)
+            elif len(D) == 0:
+                qVals = np.random.rand(actionRange)
+            action = np.argmax(qVals)
             #Take action, observe environment and other info
             postObs, reward, done, info = env.step(action)
             #Downsample postObs and adjust the
@@ -77,14 +82,16 @@ def main():
                 D.append({"preObs":np.asarray([preObs]),
                     "action":np.asarray([action]),
                     'reward':np.asarray([reward]),
+                    'Q-Values':np.asarray([qVals]),
                     'postObs':np.asarray([postObs])})
-            elif len(D) >= replayCache:
+            elif len(D) == replayCache:
                 span = t // replayCache #The number of times we've completely replaced
                                        # the replay cache with new values
                 i = (t-1) - (span * replayCache) # the current oldest spot on the replay cache
                 D[i] = {"preObs":np.asarray([preObs]),
                     "action":np.asarray([action]),
                     'reward':np.asarray([reward]),
+                    'Q-Values':np.asarray([qVals]),
                     'postObs':np.asarray([postObs])}
             #Train net
             train_net(D, batchNum, logging_hook, actionRange)
@@ -99,7 +106,10 @@ def main():
             if done:
                 print("Episode ", i_episode," finished")
                 print('Score ', score)
+                line = 'Score for episode ' + str(i_episode) + ": " + str(score)
+                F.write(line)
                 break
+    F.close()
 
 def train_net(D, batchNum, logging_hook, actionRange):
     #Update neural net using random values from the cache
@@ -113,23 +123,13 @@ def train_net(D, batchNum, logging_hook, actionRange):
         rand = rand[:batchNum]
 
     for i in rand:
-        if len(D) != 1:
-            pred_input_fn = tf.estimator.inputs.numpy_input_fn(
-                    x = {'X':D[i]['preObs']},
-                    batch_size = 1,
-                    shuffle = False)
-            labels = net.predict(
-                    input_fn = pred_input_fn)
-            labels = list(labels)[0]['Q-Values']
-        elif len(D) == 1: #meaning we havent trained the net yet and there
-                        # are no predicted values
-            labels = np.random.rand(actionRange)
+        labels = D[i]['Q-Values']
         #Use predicted values to calculate loss and perform
         # a gradient descent step
         train_input_fn = tf.estimator.inputs.numpy_input_fn(
                 x = {'X':D[i]['postObs'],
                     'reward':D[i]['reward']},
-                y = np.asarray([labels]),
+                y = labels,
                 batch_size = 1,
                 shuffle = False)
         net.train(
