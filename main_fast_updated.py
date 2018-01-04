@@ -4,7 +4,11 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python import debug as tf_debug
 
-def main():
+class deep_q_network(replayCache,
+        batchNum,
+        actionRange,
+        observationSpace,
+        model_dir):
     sess = tf.Session() #needed to prevent core dump with GPU tensorflow, probably a bug
     sess = tf_debug.LocalCLIDebugWrapperSession(sess)
     #hyperparameters
@@ -249,4 +253,11 @@ def Q_Net(features, labels, mode, params):
 
 
 
-main()
+def main():
+     #hyperparameters
+    replayCache = 100 #number of events we will hold in memory
+    batchNum = 32 #number of experiences we will replay at each time step
+    actionRange = 18 #number of possible actions at each time-step
+                    # for the given environment
+    observationSpace = (250, 160, 3) #observation space for the given environment
+    model_dir = '/home/w/wp/wporr/Atari_AI/model_dir'

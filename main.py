@@ -41,14 +41,14 @@ def main():
 
         #Initialize the observations so we have a block of 4 frames
         for i in range(3):
-            env.render()
+            #env.render()
             obs, reward, done, info = env.step(0)
             score += reward
             preObs = Preprocess(obs, preObs, True)
 
         while 1:
             #Render environment to see visual progress
-            env.render()
+            #env.render()
             #Predict Q-Values of actions
             action = 0
             if len(D) != 0:
